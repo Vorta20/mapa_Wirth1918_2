@@ -1,0 +1,1101 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/MarkerCluster.css">
+        <link rel="stylesheet" href="css/MarkerCluster.Default.css">
+        <link rel="stylesheet" href="css/filter.css">
+<link rel="stylesheet" href="css/nouislider.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title>Putování (1914–1918)</title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet.markercluster.js"></script>
+        <script src="js/tailDT.js"></script>
+<script src="js/nouislider.min.js"></script>
+<script src="js/wNumb.js"></script>
+        <script src="data/Hranice_3.js"></script>
+        <script src="data/Pohybosob_4.js"></script>
+        <script src="data/Navtvenmsta_5.js"></script>
+        <script>
+        // --- Vlastní úprava: pevný počáteční pohled na mapu ---
+        // Původní map.fitBounds(...) si samo dopočítávalo zoom podle aktuální
+        // pixelové velikosti #map divu - na notebooku a na velkém externím
+        // monitoru proto vycházel jiný zoom a tedy i jiný (dole navíc natvrdo
+        // zamčený) výřez mapy. Střed a zoom jsou teď pevně dané (setView), takže
+        // měřítko i výřez jsou na všech zařízeních stejné.
+        var map = L.map('map', {
+            zoomControl: false,
+            maxZoom: 11,
+            minZoom: 6,
+            maxBounds: L.latLngBounds(
+                [41.927088784312986, 4.08157305298569],
+                [54.69405779497386, 33.1164705086548]
+            )
+        }).setView([48.713509044983, 18.599021780820255], 6);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+
+        // --- Vlastní úprava: sjednocení názvů atributů mezi vrstvou bodů a vrstvou tras,
+        //     aby filtr Rok / Jména fungoval na obou vrstvách stejně (qgis2web export
+        //     má u bodů atributy 'ROK' a 'Jméno' ve zkráceném tvaru, např. "Zd. Wirth",
+        //     u linek atributy 'Rok' a 'Jména ' v plném tvaru, např. "Zdeněk Wirth").
+        //     Mapování zkratka -> plné jméno se dopočítá dynamicky z vrstvy tras podle
+        //     příjmení, takže funguje i po případné další změně jmen v QGISu. ---
+        (function normalizeAttributesForFilter() {
+            if (typeof json_Navtvenmsta_5 === 'undefined' || typeof json_Pohybosob_4 === 'undefined') return;
+            var surnameToFullName = {};
+            json_Pohybosob_4.features.forEach(function (f) {
+                var full = f.properties['Jména '];
+                if (!full) return;
+                var parts = String(full).trim().split(' ');
+                surnameToFullName[parts[parts.length - 1]] = full;
+            });
+            json_Navtvenmsta_5.features.forEach(function (f) {
+                var p = f.properties;
+                if (p['ROK'] !== undefined && p['Rok'] === undefined) {
+                    p['Rok'] = p['ROK'];
+                }
+                if (p['Jméno'] !== undefined && p['Jména '] === undefined) {
+                    var parts = String(p['Jméno']).trim().split(' ');
+                    var surname = parts[parts.length - 1];
+                    p['Jména '] = surnameToFullName[surname] || p['Jméno'];
+                }
+            });
+        })();
+
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    var img = popup._contentNode.querySelector('td img');
+                    if (img) {
+                        // If already loaded (cache), update immediately
+                        if (img.complete && img.naturalHeight > 0) {
+                            popup.update();
+                        } else {
+                            img.addEventListener('load', function() {
+                                popup.update();
+                            });
+                            img.addEventListener('error', function() {
+                                popup.update();
+                            });
+                        }
+                    }
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({'position':'topright'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>Putování (1914–1918)</h2>';
+        };
+        title.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        map.createPane('pane_OSMStandard_0');
+        map.getPane('pane_OSMStandard_0').style.zIndex = 400;
+        var layer_OSMStandard_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OSMStandard_0',
+            opacity: 1.0,
+            attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors, CC-BY-SA</a>',
+            minZoom: 6,
+            maxZoom: 11,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OSMStandard_0;
+        map.addLayer(layer_OSMStandard_0);
+        map.createPane('pane_Podkladovmapa2_1');
+        map.getPane('pane_Podkladovmapa2_1').style.zIndex = 401;
+        var img_Podkladovmapa2_1 = 'data/Podkladovmapa2_1.png';
+        var img_bounds_Podkladovmapa2_1 = [[28.540125208999996,-13.931724787],[60.939460912,56.748032496]];
+        var layer_Podkladovmapa2_1 = new L.imageOverlay(img_Podkladovmapa2_1,
+                                              img_bounds_Podkladovmapa2_1,
+                                              {pane: 'pane_Podkladovmapa2_1'});
+        bounds_group.addLayer(layer_Podkladovmapa2_1);
+        map.addLayer(layer_Podkladovmapa2_1);
+        map.createPane('pane_Podkladovmapa1_2');
+        map.getPane('pane_Podkladovmapa1_2').style.zIndex = 402;
+        var layer_Podkladovmapa1_2 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'pane_Podkladovmapa1_2',
+            opacity: 0.601,
+            attribution: '',
+            minZoom: 6,
+            maxZoom: 11,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+        layer_Podkladovmapa1_2;
+        map.addLayer(layer_Podkladovmapa1_2);
+        function pop_Hranice_3(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['NAME'] !== null ? autolinker.link(String(feature.properties['NAME']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['ABBREVN'] !== null ? autolinker.link(String(feature.properties['ABBREVN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['SUBJECTO'] !== null ? autolinker.link(String(feature.properties['SUBJECTO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['BORDERPRECISION'] !== null ? autolinker.link(String(feature.properties['BORDERPRECISION']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['PARTOF'] !== null ? autolinker.link(String(feature.properties['PARTOF']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['auxiliary_storage_labeling_lineanchorpercent'] !== null ? autolinker.link(String(feature.properties['auxiliary_storage_labeling_lineanchorpercent']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['auxiliary_storage_labeling_lineanchorclipping'] !== null ? autolinker.link(String(feature.properties['auxiliary_storage_labeling_lineanchorclipping']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['auxiliary_storage_labeling_lineanchortype'] !== null ? autolinker.link(String(feature.properties['auxiliary_storage_labeling_lineanchortype']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['auxiliary_storage_labeling_lineanchortextpoint'] !== null ? autolinker.link(String(feature.properties['auxiliary_storage_labeling_lineanchortextpoint']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Hranice_3_0() {
+            return {
+                pane: 'pane_Hranice_3',
+                opacity: 1,
+                color: 'rgba(0,0,0,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_Hranice_3');
+        map.getPane('pane_Hranice_3').style.zIndex = 403;
+        map.getPane('pane_Hranice_3').style['mix-blend-mode'] = 'normal';
+        var layer_Hranice_3 = new L.geoJson(json_Hranice_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_Hranice_3',
+            layerName: 'layer_Hranice_3',
+            pane: 'pane_Hranice_3',
+            onEachFeature: pop_Hranice_3,
+            style: style_Hranice_3_0,
+        });
+        bounds_group.addLayer(layer_Hranice_3);
+        map.addLayer(layer_Hranice_3);
+        function pop_Pohybosob_4(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Rok'] !== null ? autolinker.link(String(feature.properties['Rok']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Jména '] !== null ? autolinker.link(String(feature.properties['Jména ']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Pohybosob_4_0(feature) {
+            switch(String(feature.properties['q2wHide_jmeno'])) {
+                case 'Janak':
+                    return {
+                pane: 'pane_Pohybosob_4',
+                opacity: 1,
+                color: 'rgba(192,57,43,1.0)',
+                dashArray: '12.0,6.0',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Kramar':
+                    return {
+                pane: 'pane_Pohybosob_4',
+                opacity: 1,
+                color: 'rgba(211,84,0,1.0)',
+                dashArray: '12.0,6.0',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Matejcka':
+                    return {
+                pane: 'pane_Pohybosob_4',
+                opacity: 1,
+                color: 'rgba(27,79,114,1.0)',
+                dashArray: '12.0,6.0',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Wirth':
+                    return {
+                pane: 'pane_Pohybosob_4',
+                opacity: 1,
+                color: 'rgba(118,68,138,1.0)',
+                dashArray: '12.0,6.0',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Pohybosob_4');
+        map.getPane('pane_Pohybosob_4').style.zIndex = 404;
+        map.getPane('pane_Pohybosob_4').style['mix-blend-mode'] = 'normal';
+        var layer_Pohybosob_4 = new L.geoJson(json_Pohybosob_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Pohybosob_4',
+            layerName: 'layer_Pohybosob_4',
+            pane: 'pane_Pohybosob_4',
+            onEachFeature: pop_Pohybosob_4,
+            style: style_Pohybosob_4_0,
+        });
+        bounds_group.addLayer(layer_Pohybosob_4);
+        map.addLayer(layer_Pohybosob_4);
+        function pop_Navtvenmsta_5(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Místo</th>\
+                        <td>' + (feature.properties['M�STO'] !== null ? autolinker.link(String(feature.properties['M�STO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Rok</th>\
+                        <td>' + (feature.properties['ROK'] !== null ? autolinker.link(String(feature.properties['ROK']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Pořadí </th>\
+                        <td>' + (feature.properties['PORADI'] !== null ? autolinker.link(String(feature.properties['PORADI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Jméno</th>\
+                        <td>' + (feature.properties['Jméno'] !== null ? autolinker.link(String(feature.properties['Jméno']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        // --- Vlastní úprava: velikost a barva bodu podle toho, jestli jde o
+        //     počáteční, koncový nebo průběžný bod cesty dané osoby. Dřívější
+        //     export měl k tomu přímo pole 'Druh' (1 = start, 2 = konec, jinak
+        //     mezizastávka) - to už v datech není, ale je tu pole 'PORADI',
+        //     které čísluje zastávky KAŽDÉ OSOBY zvlášť od 1 do N v pořadí
+        //     cesty. Nejmenší PORADI dané osoby je tedy počáteční bod, největší
+        //     koncový bod, vše mezi tím mezizastávka - spočítá se to jednou
+        //     dopředu z celé (nefiltrované) vrstvy bodů.
+        var poradiRangeByJmeno_Navtvenmsta_5 = {};
+        (function () {
+            if (typeof json_Navtvenmsta_5 === 'undefined') return;
+            json_Navtvenmsta_5.features.forEach(function (f) {
+                var jmeno = f.properties['Jméno'];
+                var poradi = parseInt(f.properties['PORADI'], 10);
+                if (jmeno == null || isNaN(poradi)) return;
+                var range = poradiRangeByJmeno_Navtvenmsta_5[jmeno];
+                if (!range) {
+                    poradiRangeByJmeno_Navtvenmsta_5[jmeno] = { min: poradi, max: poradi };
+                } else {
+                    if (poradi < range.min) range.min = poradi;
+                    if (poradi > range.max) range.max = poradi;
+                }
+            });
+        })();
+        function style_Navtvenmsta_5_0(feature) {
+            var jmeno = feature ? feature.properties['Jméno'] : null;
+            var poradi = feature ? parseInt(feature.properties['PORADI'], 10) : NaN;
+            var range = jmeno != null ? poradiRangeByJmeno_Navtvenmsta_5[jmeno] : null;
+            var radius = 6.0;
+            var fillColor = 'rgba(43,225,52,1.0)';
+            if (range && !isNaN(poradi)) {
+                if (poradi === range.min) {
+                    radius = 14.0;
+                    fillColor = 'rgba(39,174,96,1.0)';
+                } else if (poradi === range.max) {
+                    radius = 14.0;
+                    fillColor = 'rgba(192,57,43,1.0)';
+                }
+            }
+            return {
+                pane: 'pane_Navtvenmsta_5',
+                radius: radius,
+                opacity: 1,
+                color: 'rgba(0,0,0,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: fillColor,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Navtvenmsta_5');
+        map.getPane('pane_Navtvenmsta_5').style.zIndex = 405;
+        map.getPane('pane_Navtvenmsta_5').style['mix-blend-mode'] = 'normal';
+        var layer_Navtvenmsta_5 = new L.geoJson(json_Navtvenmsta_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Navtvenmsta_5',
+            layerName: 'layer_Navtvenmsta_5',
+            pane: 'pane_Navtvenmsta_5',
+            onEachFeature: pop_Navtvenmsta_5,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.circleMarker(latlng, style_Navtvenmsta_5_0(feature));
+            },
+        });
+        var cluster_Navtvenmsta_5 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Navtvenmsta_5.addLayer(layer_Navtvenmsta_5);
+
+        bounds_group.addLayer(layer_Navtvenmsta_5);
+        cluster_Navtvenmsta_5.addTo(map);
+
+        // --- Vlastní úprava: šipky se směrem pohybu na trasách (Pohybosob_4) ---
+        // Barvy odpovídají barvám linek v style_Pohybosob_4_0.
+        var personColors_Pohybosob_4 = {
+            'Janak': 'rgba(192,57,43,1.0)',
+            'Kramar': 'rgba(211,84,0,1.0)',
+            'Matejcka': 'rgba(27,79,114,1.0)',
+            'Wirth': 'rgba(118,68,138,1.0)'
+        };
+        function bearingBetween(lat1, lon1, lat2, lon2) {
+            var toRad = function (d) { return d * Math.PI / 180; };
+            var toDeg = function (r) { return r * 180 / Math.PI; };
+            var dLon = toRad(lon2 - lon1);
+            var y = Math.sin(dLon) * Math.cos(toRad(lat2));
+            var x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+                    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+            return (toDeg(Math.atan2(y, x)) + 360) % 360;
+        }
+        function haversineKm(a, b) {
+            var R = 6371;
+            var toRad = function (d) { return d * Math.PI / 180; };
+            var dLat = toRad(b[1] - a[1]);
+            var dLon = toRad(b[0] - a[0]);
+            var lat1 = toRad(a[1]), lat2 = toRad(b[1]);
+            var h = Math.pow(Math.sin(dLat / 2), 2) +
+                    Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dLon / 2), 2);
+            return 2 * R * Math.asin(Math.sqrt(h));
+        }
+        function midpointWithBearing(coords) {
+            // coords: pole bodů [lon, lat] jedné linie (jeden úsek trasy)
+            if (!coords || coords.length < 2) return null;
+            var dist = [0];
+            for (var i = 1; i < coords.length; i++) {
+                dist.push(dist[i - 1] + haversineKm(coords[i - 1], coords[i]));
+            }
+            var half = dist[dist.length - 1] / 2;
+            var idx = 1;
+            while (idx < dist.length && dist[idx] < half) idx++;
+            var p1 = coords[idx - 1], p2 = coords[idx];
+            var segLen = dist[idx] - dist[idx - 1];
+            var t = segLen > 0 ? (half - dist[idx - 1]) / segLen : 0;
+            var lat = p1[1] + (p2[1] - p1[1]) * t;
+            var lon = p1[0] + (p2[0] - p1[0]) * t;
+            return {
+                latlng: L.latLng(lat, lon),
+                bearing: bearingBetween(p1[1], p1[0], p2[1], p2[0])
+            };
+        }
+        var layer_Pohybosob_4_arrows = L.layerGroup();
+        function rebuildArrows_Pohybosob_4() {
+            layer_Pohybosob_4_arrows.clearLayers();
+            layer_Pohybosob_4.eachLayer(function (lyr) {
+                var feature = lyr.feature;
+                if (!feature || !feature.geometry) return;
+                var color = personColors_Pohybosob_4[feature.properties['q2wHide_jmeno']] || 'rgba(60,60,60,1.0)';
+                feature.geometry.coordinates.forEach(function (lineCoords) {
+                    var arrow = midpointWithBearing(lineCoords);
+                    if (!arrow) return;
+                    // Pozn.: šipka je nakreslená jako SVG trojúhelník, jehož těžiště
+                    // leží přesně ve středu SVG (8,8) - kolem tohoto bodu se zároveň
+                    // otáčí (transform="rotate(...)" v samotném SVG, ne CSS transform
+                    // na obalovém divu). Díky tomu zůstává těžiště šipky přesně na
+                    // bodu arrow.latlng (střed linie) při libovolném úhlu natočení -
+                    // dřívější verze (CSS border-trik + CSS transform:rotate na celém
+                    // ikonovém divu) měla těžiště trojúhelníku posunuté od skutečného
+                    // středu ohraničujícího boxu, takže se šipka po otočení vizuálně
+                    // posouvala mimo osu linie.
+                    var icon = L.divIcon({
+                        className: 'movement-arrow-icon',
+                        html: '<svg width="16" height="16" viewBox="0 0 16 16" style="overflow:visible;">' +
+                              '<polygon points="8,0 3,12 13,12" fill="' + color + '" transform="rotate(' + arrow.bearing + ' 8 8)"></polygon>' +
+                              '</svg>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    });
+                    L.marker(arrow.latlng, { icon: icon, interactive: false, keyboard: false }).addTo(layer_Pohybosob_4_arrows);
+                });
+            });
+        }
+        rebuildArrows_Pohybosob_4();
+        layer_Pohybosob_4_arrows.addTo(map);
+        // Šipky nemají vlastní položku v přepínači vrstev - řídí se viditelností
+        // vrstvy "Pohyb osob" (layer_Pohybosob_4), zapnou/vypnou se s ní společně.
+        map.on('overlayadd', function (e) {
+            if (e.layer === layer_Pohybosob_4) {
+                layer_Pohybosob_4_arrows.addTo(map);
+            }
+        });
+        map.on('overlayremove', function (e) {
+            if (e.layer === layer_Pohybosob_4) {
+                map.removeLayer(layer_Pohybosob_4_arrows);
+            }
+        });
+
+        map.on("zoomend", function(e) {
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Podkladovmapa2_1);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Podkladovmapa2_1);
+            }
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Podkladovmapa1_2);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Podkladovmapa1_2);
+            }
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Hranice_3);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Hranice_3);
+            }
+        });
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Podkladovmapa2_1);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Podkladovmapa2_1);
+            }
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Podkladovmapa1_2);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Podkladovmapa1_2);
+            }
+            if (map.getZoom() <= 7 && map.getZoom() >= 2) {
+                map.addLayer(layer_Hranice_3);
+            } else if (map.getZoom() > 7 || map.getZoom() < 2) {
+                map.removeLayer(layer_Hranice_3);
+            }
+        var overlaysTree = [
+            {label: 'Navštívená místa<br /><table><tr><td style="text-align: center;"><span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: rgba(39,174,96,1.0); border: 1px solid #000;"></span></td><td>Počátek cesty</td></tr><tr><td style="text-align: center;"><span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background-color: rgba(43,225,52,1.0); border: 1px solid #000;"></span></td><td>Průběžný bod</td></tr><tr><td style="text-align: center;"><span style="display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: rgba(192,57,43,1.0); border: 1px solid #000;"></span></td><td>Konec cesty</td></tr></table>', layer: cluster_Navtvenmsta_5},
+            {label: 'Pohyb osob<br /><table><tr><td style="text-align: center;"><img src="legend/Pohybosob_4_Janak0.png" /></td><td>Pavel Janák</td></tr><tr><td style="text-align: center;"><img src="legend/Pohybosob_4_Kramar1.png" /></td><td>Vincenc Kramář</td></tr><tr><td style="text-align: center;"><img src="legend/Pohybosob_4_Matejcka2.png" /></td><td>Antonín Matějček</td></tr><tr><td style="text-align: center;"><img src="legend/Pohybosob_4_Wirth3.png" /></td><td>Zdeněk Wirth</td></tr></table>', layer: layer_Pohybosob_4},
+            {label: '<img src="legend/Hranice_3.png" /> Hranice', layer: layer_Hranice_3},
+            {label: "Podkladová mapa 1", layer: layer_Podkladovmapa1_2},
+            {label: "Podkladová mapa 2", layer: layer_Podkladovmapa2_1},
+            {label: "OSM Standard", layer: layer_OSMStandard_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+
+        // --- Vlastní úprava: správné vycentrování názvů států (Hranice_3) ---
+        // Leaflet u polygonu s více částmi (MultiPolygon) bere pro výchozí
+        // umístění tooltipu (getCenter) pouze PRVNÍ část geometrie - pokud má
+        // stát v datech kromě hlavního území i drobné ostrůvky/exklávy jako
+        // samostatné části pole coordinates, může tak popisek skončit
+        // uprostřed malého ostrůvku daleko od zbytku země (přesně to se dělo
+        // u Německa - popisek byl na ostrůvku v Baltském moři na severu).
+        // Místo toho si pro každý stát najdeme "vizuální střed" (pól
+        // nepřístupnosti / pole of inaccessibility, stejný princip jako
+        // používá např. Mapbox pro popisky států) největší souvislé části
+        // jeho území, a tooltip na tento bod výslovně umístíme.
+        function ringSignedArea(ring) {
+            var sum = 0;
+            for (var i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+                sum += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]);
+            }
+            return sum / 2;
+        }
+        function ringCentroidXY(ring) {
+            var x = 0, y = 0, n = ring.length;
+            for (var i = 0; i < n; i++) { x += ring[i][0]; y += ring[i][1]; }
+            return [x / n, y / n];
+        }
+        function pointToSegDist(px, py, ax, ay, bx, by) {
+            var x = ax, y = ay, dx = bx - ax, dy = by - ay;
+            if (dx !== 0 || dy !== 0) {
+                var t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy);
+                if (t > 1) { x = bx; y = by; }
+                else if (t > 0) { x += dx * t; y += dy * t; }
+            }
+            dx = px - x; dy = py - y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        // Znaménková vzdálenost bodu od polygonu (kladná uvnitř, záporná vně)
+        function pointToPolygonDist(x, y, rings) {
+            var inside = false, minDist = Infinity;
+            for (var k = 0; k < rings.length; k++) {
+                var ring = rings[k];
+                for (var i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+                    var a = ring[i], b = ring[j];
+                    if ((a[1] > y) !== (b[1] > y) &&
+                        (x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0])) {
+                        inside = !inside;
+                    }
+                    minDist = Math.min(minDist, pointToSegDist(x, y, a[0], a[1], b[0], b[1]));
+                }
+            }
+            return (inside ? 1 : -1) * minDist;
+        }
+        function makeCell(x, y, h, rings) {
+            var d = pointToPolygonDist(x, y, rings);
+            return { x: x, y: y, h: h, d: d, max: d + h * Math.SQRT2 };
+        }
+        function centroidCell(rings) {
+            var area = 0, x = 0, y = 0, ring = rings[0];
+            for (var i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+                var a = ring[i], b = ring[j];
+                var f = a[0] * b[1] - b[0] * a[1];
+                x += (a[0] + b[0]) * f;
+                y += (a[1] + b[1]) * f;
+                area += f * 3;
+            }
+            if (area === 0) return makeCell(ring[0][0], ring[0][1], 0, rings);
+            return makeCell(x / area, y / area, 0, rings);
+        }
+        // "Pole of inaccessibility" - bod uvnitř polygonu nejdál od hranice,
+        // vhodný pro umístění popisku i u nepravidelných/protáhlých tvarů.
+        function polylabel(rings) {
+            var outer = rings[0];
+            var minX, minY, maxX, maxY;
+            for (var i = 0; i < outer.length; i++) {
+                var p = outer[i];
+                if (i === 0 || p[0] < minX) minX = p[0];
+                if (i === 0 || p[1] < minY) minY = p[1];
+                if (i === 0 || p[0] > maxX) maxX = p[0];
+                if (i === 0 || p[1] > maxY) maxY = p[1];
+            }
+            var width = maxX - minX, height = maxY - minY;
+            var cellSize = Math.min(width, height);
+            if (cellSize === 0) return { lon: outer[0][0], lat: outer[0][1] };
+            var precision = Math.max(cellSize / 40, 1e-6);
+            var h = cellSize / 2;
+            var cellQueue = [];
+            for (var x = minX; x < maxX; x += cellSize) {
+                for (var y = minY; y < maxY; y += cellSize) {
+                    cellQueue.push(makeCell(x + h, y + h, h, rings));
+                }
+            }
+            var bestCell = centroidCell(rings);
+            var bboxCell = makeCell(minX + width / 2, minY + height / 2, 0, rings);
+            if (bboxCell.d > bestCell.d) bestCell = bboxCell;
+            var numProbes = cellQueue.length;
+            while (cellQueue.length) {
+                cellQueue.sort(function (a, b) { return a.max - b.max; });
+                var cell = cellQueue.pop();
+                if (cell.d > bestCell.d) bestCell = cell;
+                if (cell.max - bestCell.d <= precision || numProbes > 15000) continue;
+                h = cell.h / 2;
+                cellQueue.push(makeCell(cell.x - h, cell.y - h, h, rings));
+                cellQueue.push(makeCell(cell.x + h, cell.y - h, h, rings));
+                cellQueue.push(makeCell(cell.x - h, cell.y + h, h, rings));
+                cellQueue.push(makeCell(cell.x + h, cell.y + h, h, rings));
+                numProbes += 4;
+            }
+            return { lon: bestCell.x, lat: bestCell.y };
+        }
+        // Oblast, ve které leží "hlavní" (mapované) území států na této mapě -
+        // vylučuje vzdálené zámořské državy typu Grónska u Dánska, které by
+        // jinak jako plošně největší část geometrie přetáhly popisek úplně
+        // mimo Evropu. Když by state neměl žádnou část v této oblasti,
+        // použije se prostě plošně největší část (bezpečná záloha).
+        var LABEL_REGION = { minLon: -15, maxLon: 185, minLat: 8, maxLat: 79 };
+        function inLabelRegion(c) {
+            return c[0] >= LABEL_REGION.minLon && c[0] <= LABEL_REGION.maxLon &&
+                   c[1] >= LABEL_REGION.minLat && c[1] <= LABEL_REGION.maxLat;
+        }
+        // Ořízne polygon (Sutherland-Hodgman) na obdélníkovou oblast - používá se níže,
+        // aby se u rozlehlých států (Rusko, Osmanská říše), které zasahují daleko mimo
+        // Evropu, hledal "vizuální střed" jen v té části území, která je na téhle mapě
+        // skutečně vidět a relevantní - jinak by pól nepřístupnosti u obřího a nepravidelně
+        // tvarovaného státu jako Rusko vyšel někde na Sibiři/v Kazachstánu, mimo záběr mapy.
+        function clipRingToBBox(ring, minX, minY, maxX, maxY) {
+            function clipEdge(points, inside, intersect) {
+                var out = [];
+                for (var i = 0; i < points.length; i++) {
+                    var cur = points[i];
+                    var prev = points[(i - 1 + points.length) % points.length];
+                    var curIn = inside(cur), prevIn = inside(prev);
+                    if (curIn) {
+                        if (!prevIn) out.push(intersect(prev, cur));
+                        out.push(cur);
+                    } else if (prevIn) {
+                        out.push(intersect(prev, cur));
+                    }
+                }
+                return out;
+            }
+            function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+            var pts = ring.slice();
+            if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+            pts = clipEdge(pts, function (p) { return p[0] >= minX; }, function (a, b) { return lerp(a, b, (minX - a[0]) / (b[0] - a[0])); });
+            if (!pts.length) return [];
+            pts = clipEdge(pts, function (p) { return p[0] <= maxX; }, function (a, b) { return lerp(a, b, (maxX - a[0]) / (b[0] - a[0])); });
+            if (!pts.length) return [];
+            pts = clipEdge(pts, function (p) { return p[1] >= minY; }, function (a, b) { return lerp(a, b, (minY - a[1]) / (b[1] - a[1])); });
+            if (!pts.length) return [];
+            pts = clipEdge(pts, function (p) { return p[1] <= maxY; }, function (a, b) { return lerp(a, b, (maxY - a[1]) / (b[1] - a[1])); });
+            if (pts.length) pts.push(pts[0]);
+            return pts;
+        }
+        // Skutečná viditelná/plovatelná oblast mapy (stejné hranice jako
+        // map.fitBounds výš - mapa má nastavené maxBounds, takže mimo tento
+        // obdélník se uživatel nikdy nedostane). Popisek necháváme na jeho
+        // přirozeném geometrickém středu, POKUD leží uvnitř - a teprve když by
+        // vyšel mimo (typicky u obřích/nepravidelných států jako Rusko, Osmanská
+        // říše nebo Švédsko, kde "vizuální střed" celého území padne daleko za
+        // hranu mapy), dopočítáme náhradní bod jen z té části území, která se na
+        // mapě opravdu zobrazuje - ať je popisek vždy někde vidět.
+        var MAP_VIEW_BOUNDS = { minLon: 4.08157305298569, minLat: 41.927088784312986, maxLon: 33.1164705086548, maxLat: 54.69405779497386 };
+        function isInMapViewBounds(pt) {
+            return pt.lon >= MAP_VIEW_BOUNDS.minLon && pt.lon <= MAP_VIEW_BOUNDS.maxLon &&
+                   pt.lat >= MAP_VIEW_BOUNDS.minLat && pt.lat <= MAP_VIEW_BOUNDS.maxLat;
+        }
+        // Ruční výjimka: u Ruského impéria je i běžně dopočítaný náhradní bod
+        // (viz labelPointForGeometry níže) posunutý až k pravému okraji mapy,
+        // kde je popisek hůř čitelný. Pro tento stát proto počítáme "vizuální
+        // střed" jen z užšího výřezu blíž k jeho západní hranici (tehdejší
+        // Polsko/Pobaltí byly součástí Ruského impéria), aby byl popisek lépe vidět.
+        var COUNTRY_LABEL_CLIP_OVERRIDES = {
+            'Ruské impérium': { minLon: MAP_VIEW_BOUNDS.minLon, minLat: MAP_VIEW_BOUNDS.minLat, maxLon: 24, maxLat: MAP_VIEW_BOUNDS.maxLat }
+        };
+        function labelPointForGeometry(geometry, name) {
+            var polys;
+            if (geometry.type === 'Polygon') polys = [geometry.coordinates];
+            else if (geometry.type === 'MultiPolygon') polys = geometry.coordinates;
+            else return null;
+            var parts = polys.map(function (p) {
+                return { poly: p, area: Math.abs(ringSignedArea(p[0])), centroid: ringCentroidXY(p[0]) };
+            });
+            parts.sort(function (a, b) { return b.area - a.area; });
+            var chosen = null;
+            for (var i = 0; i < parts.length; i++) {
+                if (inLabelRegion(parts[i].centroid)) { chosen = parts[i]; break; }
+            }
+            if (!chosen) chosen = parts[0];
+            var poly = chosen.poly;
+            var naturalPt = polylabel(poly);
+            var override = name ? COUNTRY_LABEL_CLIP_OVERRIDES[name] : null;
+            if (!override && isInMapViewBounds(naturalPt)) return naturalPt;
+            // Přirozený střed je mimo viditelnou oblast mapy (nebo je pro tento
+            // stát ručně vynucený užší výřez) - zkusíme spočítat střed jen z té
+            // části státu, která do daného obdélníku skutečně zasahuje.
+            var clipBounds = override || MAP_VIEW_BOUNDS;
+            var clippedOuter = clipRingToBBox(poly[0], clipBounds.minLon, clipBounds.minLat, clipBounds.maxLon, clipBounds.maxLat);
+            var minAreaFraction = override ? 0.001 : 0.02;
+            if (clippedOuter.length >= 4 && Math.abs(ringSignedArea(clippedOuter)) > chosen.area * minAreaFraction) {
+                var clippedPoly = [clippedOuter];
+                for (var h = 1; h < poly.length; h++) {
+                    var clippedHole = clipRingToBBox(poly[h], clipBounds.minLon, clipBounds.minLat, clipBounds.maxLon, clipBounds.maxLat);
+                    if (clippedHole.length >= 4) clippedPoly.push(clippedHole);
+                }
+                return polylabel(clippedPoly);
+            }
+            // I mimo mapu je to pořád nejlepší dostupný bod (stát na mapě
+            // prakticky vůbec není vidět, např. jen nepatrným okrajem).
+            return naturalPt;
+        }
+        // Ruční drobné doladění pozice u vybraných zemí - na výslovné přání
+        // posunuté o pár desetin stupně daným směrem oproti běžně
+        // vypočtenému bodu (beze změny samotného výpočtu/algoritmu).
+        var COUNTRY_LABEL_NUDGE = {
+            'Francouzská republika': { dLon: -0.6, dLat: 0 },
+            'Nizozemské království': { dLon: 0, dLat: -0.5 }
+        };
+        function placeCountryLabel(layer) {
+            if (layer.feature && layer.feature.geometry) {
+                var name = layer.feature.properties ? layer.feature.properties['NAME'] : null;
+                var pt = labelPointForGeometry(layer.feature.geometry, name);
+                var nudge = name ? COUNTRY_LABEL_NUDGE[name] : null;
+                if (pt && nudge) {
+                    pt = { lat: pt.lat + nudge.dLat, lon: pt.lon + nudge.dLon };
+                }
+                if (pt && layer.getTooltip()) {
+                    layer.getTooltip().setLatLng(L.latLng(pt.lat, pt.lon));
+                }
+            }
+        }
+
+        var i = 0;
+        layer_Hranice_3.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['NAME'] !== null?String('<div style="color: #000000; font-size: 13pt; font-weight: bold; font-style: italic; font-family: \'Calibri\', sans-serif;">' + layer.feature.properties['NAME']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Hranice_3', direction: 'center'});
+            placeCountryLabel(layer);
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        // --- Vlastní úprava: udržení pozice popisků zemí po zazoomování/odzoomování ---
+        // Vrstva hranic (layer_Hranice_3) se v určitém rozsahu zoomu automaticky
+        // skrývá a znovu zobrazuje (viz map.on("zoomend", ...) níže). Leaflet při
+        // každém opětovném přidání vrstvy na mapu interně otevře permanentní
+        // tooltip znovu a - protože jsme mu explicitně nepředali souřadnice -
+        // spočítá si vlastní výchozí pozici z ohraničujícího obdélníku geometrie
+        // (layer.getCenter()), čímž přepíše náš vypočtený "vizuální střed" a
+        // popisky se rozhodí. Proto při každém opětovném přidání vrstvy na mapu
+        // znovu vynutíme naši vlastní pozici.
+        map.on('layeradd', function (e) {
+            if (e.layer === layer_Hranice_3) {
+                layer_Hranice_3.eachLayer(placeCountryLabel);
+            }
+        });
+        var mapDiv = document.getElementById('map');
+        var row = document.createElement('div');
+        row.className="row";
+        row.id="all";
+        row.style.height = "100%";
+        var col1 = document.createElement('div');
+        col1.className="col9";
+        col1.id = "mapWindow";
+        col1.style.height = "99%";
+        col1.style.width = "80%";
+        col1.style.display = "inline-block";
+        var col2 = document.createElement('div');
+        col2.className="col3";
+        col2.id = "menu";
+        col2.style.display = "inline-block";
+        mapDiv.parentNode.insertBefore(row, mapDiv);
+        document.getElementById("all").appendChild(col1);
+        document.getElementById("all").appendChild(col2);
+        col1.appendChild(mapDiv)
+        var Filters = {"Rok": "int","Jména ": "str"};
+        function filterFunc() {
+          map.eachLayer(function(lyr){
+          if ("options" in lyr && "dataVar" in lyr["options"]){
+            features = this[lyr["options"]["dataVar"]].features.slice(0);
+            try{
+              for (key in Filters){
+                keyS = key.replace(/[^a-zA-Z0-9_]/g, "")
+                if (Filters[key] == "str" || Filters[key] == "bool"){
+                  var selection = [];
+                  var options = document.getElementById("sel_" + keyS).options
+                  for (var i=0; i < options.length; i++) {
+                    if (options[i].selected) selection.push(options[i].value);
+                  }
+                    try{
+                      if (key in features[0].properties){
+                        for (i = features.length - 1;
+                          i >= 0; --i){
+                          if (selection.indexOf(
+                          features[i].properties[key])<0
+                          && selection.length>0) {
+                          features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                  }
+                }
+                if (Filters[key] == "int"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (parseInt(features[i].properties[key])
+                          < sliderVals[0]
+                          || parseInt(features[i].properties[key])
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "real"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (features[i].properties[key]
+                          < sliderVals[0]
+                          || features[i].properties[key]
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "date"
+                  || Filters[key] == "datetime"
+                  || Filters[key] == "time"){
+                  try{
+                    if (key in features[0].properties){
+                      HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, '');
+                      startdate = document.getElementById("dat_" +
+                        HTMLkey + "_date1").value.replace(" ", "T");
+                      enddate = document.getElementById("dat_" +
+                        HTMLkey + "_date2").value.replace(" ", "T");
+                      for (i = features.length - 1; i >= 0; --i){
+                        if (features[i].properties[key] < startdate
+                          || features[i].properties[key] > enddate){
+                          features.splice(i,1);
+                        }
+                      }
+                    }
+                  } catch(err){
+                  }
+                }
+              }
+            } catch(err){
+            }
+          this[lyr["options"]["layerName"]].clearLayers();
+          this[lyr["options"]["layerName"]].addData(features);
+          if (lyr["options"]["layerName"] === "layer_Pohybosob_4") {
+              rebuildArrows_Pohybosob_4();
+          }
+        var i = 0;
+        layer_Hranice_3.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['NAME'] !== null?String('<div style="color: #000000; font-size: 13pt; font-weight: bold; font-style: italic; font-family: \'Calibri\', sans-serif;">' + layer.feature.properties['NAME']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Hranice_3', direction: 'center'});
+            placeCountryLabel(layer);
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+          }
+          })
+        }
+            document.getElementById("menu").appendChild(
+                document.createElement("div"));
+            var div_Rok = document.createElement("div");
+            div_Rok.id = "div_Rok";
+            div_Rok.className = "slider";
+            document.getElementById("menu").appendChild(div_Rok);
+            var lab_Rok = document.createElement('div');
+            lab_Rok.innerHTML  = 'Rok: <span id="val_Rok"></span>';
+            lab_Rok.className = 'filterlabel';
+            document.getElementById("menu").appendChild(lab_Rok);
+            var reset_Rok = document.createElement('div');
+            reset_Rok.innerHTML = 'clear filter';
+            reset_Rok.className = 'filterlabel';
+            lab_Rok.className = 'filterlabel';
+            reset_Rok.onclick = function() {
+                sel_Rok.noUiSlider.reset();
+            };
+            document.getElementById("menu").appendChild(reset_Rok);
+            var sel_Rok = document.getElementById('div_Rok');
+            noUiSlider.create(sel_Rok, {
+                connect: true,
+                start: [1914, 1918],
+                step: 1,
+                format: wNumb({
+                    decimals: 0,
+                    }),
+                range: {
+                min: 1914,
+                max: 1918
+                }
+            });
+            sel_Rok.noUiSlider.on('update', function (values) {
+            filterVals =[];
+            for (value in values){
+            filterVals.push(parseInt(value))
+            }
+            val_Rok = document.getElementById('val_Rok');
+            // Vlastní úprava: pomlčka mezi lety sjednocená s titulkem mapy (en dash "–", bez mezer)
+            val_Rok.innerHTML = values.join('–');
+                filterFunc()
+            });
+            document.getElementById("menu").appendChild(
+                document.createElement("div"));
+            var div_Jmna = document.createElement('div');
+            div_Jmna.id = "div_Jmna";
+            div_Jmna.className= "filterselect";
+            document.getElementById("menu").appendChild(div_Jmna);
+            sel_Jmna = document.createElement('select');
+            sel_Jmna.multiple = true;
+            sel_Jmna.size = 4;
+            sel_Jmna.id = "sel_Jmna";
+            var Jmna_options_str = "<option value='' unselected></option>";
+            sel_Jmna.onchange = function(){filterFunc()};
+            Jmna_options_str  += '<option value="Antonín Matějček">Antonín Matějček</option>';
+            Jmna_options_str  += '<option value="Pavel Janák">Pavel Janák</option>';
+            Jmna_options_str  += '<option value="Vincenc Kramář">Vincenc Kramář</option>';
+            Jmna_options_str  += '<option value="Zdeněk Wirth">Zdeněk Wirth</option>';
+            sel_Jmna.innerHTML = Jmna_options_str;
+            div_Jmna.appendChild(sel_Jmna);
+            var lab_Jmna = document.createElement('div');
+            lab_Jmna.innerHTML = 'Jména ';
+            lab_Jmna.className = 'filterlabel';
+            div_Jmna.appendChild(lab_Jmna);
+            var reset_Jmna = document.createElement('div');
+            reset_Jmna.innerHTML = 'clear filter';
+            reset_Jmna.className = 'filterlabel';
+            reset_Jmna.onclick = function() {
+                var options = document.getElementById("sel_Jmna").options;
+                for (var i=0; i < options.length; i++) {
+                    options[i].selected = false;
+                }
+                filterFunc();
+            };
+            div_Jmna.appendChild(reset_Jmna);
+        L.ImageOverlay.include({
+            getBounds: function () {
+                return this._bounds;
+            }
+        });
+        resetLabels([layer_Hranice_3,layer_Navtvenmsta_5]);
+        map.on("zoomend", function(){
+            resetLabels([layer_Hranice_3,layer_Navtvenmsta_5]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_Hranice_3,layer_Navtvenmsta_5]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_Hranice_3,layer_Navtvenmsta_5]);
+        });
+        </script>        
+    </body>
+</html>

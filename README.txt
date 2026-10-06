@@ -22,32 +22,21 @@ Mapu lze spustit buď nahráním na webový server (např. GitHub Pages), nebo (
 
 ### Použité nástroje
 
-QGIS DEVELOPMENT TEAM (2025): QGIS Geographic Information System. Open Source Geospatial Foundation Project, https://qgis.org (cit. 24. 9. 2026).
+QGIS Development Team, QGIS Geographic Information System, Open Source Geospatial Foundation Project 2025, https://qgis.org, vyhledáno 24. 9. 2026.
 
-QGIS2WEB DEVELOPMENT TEAM (2025): qgis2web — QGIS plugin for exporting projects to Leaflet/OpenLayers web maps, https://github.com/qgis2web/qgis2web (cit. 24. 9. 2026).
+qgis2web Development Team, qgis2web: QGIS plugin for exporting projects to Leaflet/OpenLayers web maps, 2025, https://github.com/qgis2web/qgis2web, vyhledáno 24. 9. 2026.
 
-LEAFLET (2025): Leaflet — a JavaScript library for interactive maps, https://leafletjs.com (cit. 24. 9. 2026).
+Leaflet: A JavaScript library for interactive maps, 2025, https://leafletjs.com, vyhledáno 24. 9. 2026.
 
 ### Podkladové mapy
 
-**OpenStreetMap** (vrstva „OSM Standard“). V souladu s požadavky OpenStreetMap Foundation je nutné uvádět následující označení autorství, a to viditelně u mapy nebo v jejím okolí:
+OpenStreetMap, OpenStreetMap Foundation, https://www.openstreetmap.org, vyhledáno 17. 7. 2026.
 
-> © OpenStreetMap contributors
-
-Text „OpenStreetMap" by měl odkazovat na https://www.openstreetmap.org/copyright. Mapová data OpenStreetMap jsou poskytována pod licencí **Open Database License (ODbL) 1.0** — https://opendatacommons.org/licenses/odbl/1-0/. V bibliografickém seznamu lze uvést:
-
-OPENSTREETMAP CONTRIBUTORS (2025): OpenStreetMap [databáze]. OpenStreetMap Foundation. Dostupné pod licencí Open Database License z: https://www.openstreetmap.org (cit. 24. 9. 2026).
-
-**Esri World Shaded Relief** (vrstva „Podkladová mapa 1"):
-
-ESRI (2014): World Shaded Relief [mapová služba]. https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer (cit. 24. 9. 2026).
+Esri, World Shaded Relief (mapová služba), 2014, https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer, vyhledáno 24. 9. 2026.
 
 ### Geodata
 
-*[Doplňte prosím zdroj dat pro vrstvu dobových politických hranic (Hranice_3) — např. konkrétní historický atlas, digitalizovaný podklad nebo vlastní zpracování.]*
-
-*[Doplňte prosím zdroj/e primárních pramenů pro trasy a navštívená místa jednotlivých osob (Pohybosob_4, Navštívená místa) — např. archivní materiály, korespondence, deníky, sekundární literatura.]*
-
+Department of History, United States Military Academy, Atlases, Digital History Center, https://dhc.westpoint.edu/atlases/, vyhledáno 2. 10. 2026.
 ---
 
-*Vytvořeno v rámci výzkumného projektu [doplňte název/instituci].*
+*Vytvořeno v rámci výzkumného projektu NAKI II.

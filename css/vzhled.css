@@ -1,0 +1,628 @@
+/*
+ * Vzhled mapy — „Varianta 1 – Minimalistická“
+ * Načítá se jako poslední styl, takže přepisuje výchozí vzhled z qgis2web.css,
+ * leaflet.css, filter.css, nouislider.min.css a MarkerCluster.Default.css.
+ */
+
+:root {
+    --ui-font: "Work Sans", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --title-font: "Young Serif", Georgia, "Times New Roman", serif;
+    --label-font: "Fraunces", Georgia, "Times New Roman", serif;
+
+    --accent: #2e6f6b;
+    --accent-hover: #245955;
+    --ink: #2b2b2b;
+    --muted: #6d6d68;
+    --label: #7b7b77;
+    --card: #ffffff;
+    --line: #ebeae6;
+    --track: #e3e6e1;
+    --map-bg: #e7e4d5;
+
+    --radius: 12px;
+    --shadow: 0 8px 28px rgba(45, 50, 35, 0.14), 0 1px 3px rgba(45, 50, 35, 0.08);
+    --gap: 24px;
+}
+
+/* ---------- Plocha mapy ---------- */
+
+html, body {
+    background: var(--map-bg);
+}
+#map,
+#map.leaflet-container {
+    background: var(--map-bg);
+    padding-right: 0;
+    font-family: var(--ui-font);
+    color: var(--ink) !important;
+}
+
+/* ---------- Rozmístění ovládacích prvků ---------- */
+
+#map .leaflet-control {
+    box-shadow: none !important;
+    border-radius: var(--radius);
+    clear: both;
+}
+#map .leaflet-left .leaflet-control { margin-left: var(--gap); }
+#map .leaflet-right .leaflet-control { margin-right: var(--gap); }
+#map .leaflet-top .leaflet-control { margin-top: 16px; }
+#map .leaflet-top .leaflet-control:first-child { margin-top: var(--gap); }
+#map .leaflet-bottom .leaflet-control { margin-bottom: 10px; }
+#map .leaflet-bottom .leaflet-control:last-child { margin-bottom: var(--gap); }
+
+/* vlastní roh „dole uprostřed“ pro atribuci */
+#map .leaflet-bottom.leaflet-center {
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: calc(100% - 200px);
+}
+#map .leaflet-center .leaflet-control {
+    float: none;
+    margin: 0 0 18px;
+}
+
+/* ---------- Karty (nadpis, legenda, filtr, info) ---------- */
+
+#map .map-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow) !important;
+    color: var(--ink);
+    font-family: var(--ui-font);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.card-label,
+.card-toggle {
+    display: block;
+    margin: 0 0 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: 500 11px/1.4 var(--ui-font);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--label);
+    text-align: left;
+}
+.card-sep {
+    height: 1px;
+    background: var(--line);
+    margin: 16px 0;
+}
+
+/* nadpis */
+#map .map-title {
+    padding: 20px 26px 18px;
+    max-width: 360px;
+}
+.map-title h1 {
+    margin: 0;
+    font-family: var(--title-font);
+    font-weight: 400;
+    font-size: 28px;
+    line-height: 1.15;
+    letter-spacing: -0.005em;
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
+    color: #222;
+}
+.map-title p {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+/* legenda */
+#map .legend-card {
+    padding: 18px 22px 14px;
+    width: 230px;
+}
+.legend-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+    font-size: 15px;
+}
+.legend-list--minor .legend-item {
+    font-size: 14px;
+    color: var(--muted);
+}
+.legend-symbol {
+    flex: none;
+    width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.legend-line {
+    display: block;
+    width: 22px;
+    height: 3px;
+    border-radius: 2px;
+    background: currentColor;
+}
+.legend-line--thin {
+    height: 1px;
+    background: #5f6452;
+}
+.legend-dot {
+    display: block;
+    border-radius: 50%;
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.legend-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(159, 191, 154, 0.9);
+    box-shadow: 0 0 0 3px rgba(159, 191, 154, 0.4);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+/* filtr */
+#map .filter-card {
+    padding: 20px 24px 16px;
+    width: 300px;
+}
+#map #menu {
+    display: block;
+    width: auto;
+}
+.card-toggle--mobile {
+    display: none;
+}
+.filter-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+}
+.filter-head .card-label {
+    margin: 0;
+}
+.filter-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+}
+#menu .slider {
+    margin: 0 9px 6px;
+}
+.check-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 0;
+    font-size: 15px;
+    cursor: pointer;
+    user-select: none;
+}
+.ui-check {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1.5px solid #b8c1be;
+    border-radius: 4px;
+    background: #fff;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.ui-check::after {
+    content: "";
+    width: 5px;
+    height: 10px;
+    margin-top: -2px;
+    border: solid #fff;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+}
+.ui-check:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.ui-check:checked::after {
+    opacity: 1;
+}
+.ui-check:focus-visible,
+.filter-reset:focus-visible,
+.info-btn:focus-visible,
+.card-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.filter-reset {
+    display: block;
+    margin: 12px 0 0 auto;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    font: 400 14px/1.4 var(--ui-font);
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    cursor: pointer;
+}
+.filter-reset:hover {
+    color: var(--accent-hover);
+}
+
+/* posuvník roku (noUiSlider) */
+#menu .noUi-target {
+    height: 6px;
+    background: var(--track);
+    border: 0;
+    border-radius: 3px;
+    box-shadow: none;
+}
+#menu .noUi-connects {
+    border-radius: 3px;
+}
+#menu .noUi-connect {
+    background: var(--accent);
+}
+#menu .noUi-horizontal .noUi-handle {
+    width: 18px;
+    height: 18px;
+    top: -6px;
+    right: -9px;
+    left: auto;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    cursor: grab;
+}
+#menu .noUi-handle:before,
+#menu .noUi-handle:after {
+    display: none;
+}
+#menu .noUi-active {
+    cursor: grabbing;
+    box-shadow: 0 0 0 6px rgba(46, 111, 107, 0.18);
+}
+
+/* pravý dolní roh: vrstvy a měření nad tlačítkem „i“ */
+#map .leaflet-bottom.leaflet-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+#map .leaflet-bottom.leaflet-right .leaflet-control {
+    margin-bottom: 10px;
+}
+#map .leaflet-bottom.leaflet-right .info-control {
+    order: 1;
+    margin-bottom: var(--gap);
+}
+
+/* informační tlačítko */
+#map .info-control {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+.info-btn {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font: 400 22px/48px var(--title-font);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.info-btn:hover {
+    background: var(--accent-hover);
+}
+#map .info-panel {
+    width: 320px;
+    padding: 18px 22px;
+}
+#map .info-panel[hidden] {
+    display: none;
+}
+.info-panel h2 {
+    margin: 0 0 8px;
+    font: 400 19px/1.25 var(--title-font);
+    color: #222;
+}
+.info-panel p {
+    margin: 0 0 8px;
+    color: var(--muted);
+}
+.info-panel p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Tlačítka mapy (přiblížení, měření, vrstvy) ---------- */
+
+#map .leaflet-bar,
+#map .leaflet-control-measure,
+#map .leaflet-control-layers {
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: #fff !important;
+    box-shadow: var(--shadow) !important;
+    overflow: hidden;
+}
+#map .leaflet-bar a,
+#map .leaflet-control-zoom-in,
+#map .leaflet-control-zoom-out {
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font: 300 22px/40px var(--ui-font);
+    text-indent: 0;
+    color: var(--ink) !important;
+    background-color: #fff !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--line);
+}
+#map .leaflet-bar a:last-child {
+    border-bottom: 0;
+}
+#map .leaflet-bar a:hover {
+    background-color: #f4f4f1 !important;
+}
+
+#map .leaflet-control-measure .leaflet-control-measure-toggle,
+#map .leaflet-control-measure .leaflet-control-measure-toggle:hover {
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+    font-size: 15px !important;
+    border-radius: 10px !important;
+    background-color: #fff !important;
+    background-image: none !important;
+    color: var(--ink) !important;
+}
+#map .leaflet-control-measure .leaflet-control-measure-interaction {
+    background-color: #fff !important;
+    padding: 12px 16px;
+    font: 13px/1.5 var(--ui-font);
+    color: var(--ink);
+}
+#map .leaflet-control-measure h3 {
+    font: 500 14px/1.4 var(--ui-font);
+    margin: 0 0 6px;
+}
+
+/* přepínač vrstev */
+#map .leaflet-control-layers {
+    padding: 0;
+    align-items: flex-start;
+}
+#map .leaflet-control-layers-toggle {
+    width: 40px;
+    height: 40px;
+    background-size: 20px 20px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232b2b2b' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3 2.5 8 12 13l9.5-5L12 3z'/%3E%3Cpath d='m2.5 12 9.5 5 9.5-5'/%3E%3Cpath d='m2.5 16 9.5 5 9.5-5'/%3E%3C/svg%3E");
+}
+#map .leaflet-control-layers-expanded {
+    padding: 14px 18px 12px !important;
+}
+#map .leaflet-control-layers-list {
+    font: 14px/1.9 var(--ui-font);
+    color: var(--ink);
+}
+#map .leaflet-control-layers-list input[type="checkbox"],
+#map .leaflet-control-layers-list input[type="radio"] {
+    accent-color: var(--accent);
+    margin-right: 6px;
+}
+#map .leaflet-control-layers-separator {
+    border-top-color: var(--line);
+}
+
+/* ---------- Atribuce ---------- */
+
+#map .leaflet-control-attribution {
+    background: rgba(255, 255, 255, 0.6) !important;
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    box-shadow: none !important;
+    border-radius: 8px;
+    padding: 2px 10px;
+    font: 12px/1.5 var(--ui-font);
+    color: rgba(60, 62, 50, 0.8) !important;
+}
+#map .leaflet-control-attribution a {
+    color: rgba(60, 62, 50, 0.85) !important;
+    text-decoration: none;
+}
+#map .leaflet-control-attribution a:hover {
+    text-decoration: underline;
+}
+
+/* ---------- Vyskakovací okna (popupy) ---------- */
+
+#map .leaflet-popup-content-wrapper {
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2px;
+}
+#map .leaflet-popup-content {
+    margin: 14px 20px 14px 18px;
+    font: 14px/1.5 var(--ui-font);
+    color: var(--ink);
+}
+#map .leaflet-popup-content table {
+    border-collapse: collapse;
+}
+#map .leaflet-popup-content th {
+    min-width: 0;
+    padding: 3px 16px 3px 0;
+    font: 500 11px/1.9 var(--ui-font);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--label);
+}
+#map .leaflet-popup-content td {
+    min-width: 0;
+    padding: 3px 0;
+}
+#map .leaflet-popup-tip {
+    box-shadow: none;
+}
+#map a.leaflet-popup-close-button {
+    color: #9a9a95 !important;
+    top: 4px;
+    right: 4px;
+}
+
+/* ---------- Shluky bodů (MarkerCluster) ---------- */
+
+#map .marker-cluster-small,
+#map .marker-cluster-medium,
+#map .marker-cluster-large {
+    background-color: rgba(159, 191, 154, 0.4);
+}
+#map .marker-cluster-small div,
+#map .marker-cluster-medium div,
+#map .marker-cluster-large div {
+    background-color: rgba(159, 191, 154, 0.92);
+}
+#map .marker-cluster div {
+    font: 600 12px var(--ui-font);
+    color: var(--ink);
+}
+
+/* ---------- Popisky států ---------- */
+
+#map .country-label {
+    font-family: var(--label-font);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    color: #2a2922;
+    white-space: nowrap;
+}
+#map .css_Hranice_3 {
+    text-shadow: 0 0 2px rgba(250, 248, 240, 0.95),
+        0 0 4px rgba(250, 248, 240, 0.85),
+        0 0 8px rgba(250, 248, 240, 0.6);
+}
+
+/* směrové šipky tras */
+.movement-arrow-icon {
+    background: none;
+    border: 0;
+}
+
+/* ---------- Úzké obrazovky (telefon) ---------- */
+
+@media (min-width: 641px) {
+    .legend-card .card-toggle {
+        pointer-events: none;
+        cursor: default;
+    }
+}
+
+@media (max-width: 640px) {
+    :root {
+        --gap: 12px;
+    }
+    #map .map-title {
+        padding: 12px 14px 10px;
+        max-width: calc(100vw - 150px);
+    }
+    .map-title h1 {
+        font-size: 19px;
+    }
+    .map-title p {
+        font-size: 12px;
+        margin-top: 3px;
+    }
+    #map .leaflet-top .leaflet-control {
+        margin-top: 10px;
+    }
+    #map .legend-card,
+    #map .filter-card {
+        padding: 12px 14px;
+        width: auto;
+        max-width: calc(100vw - 24px);
+    }
+    #map .filter-card {
+        width: 240px;
+        max-width: calc(100vw - 24px);
+    }
+    #map .filter-card.is-collapsed {
+        width: auto;
+    }
+    .card-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        cursor: pointer;
+    }
+    .card-toggle--mobile {
+        display: flex;
+    }
+    .card-toggle::after {
+        content: "";
+        width: 6px;
+        height: 6px;
+        margin-top: 3px;
+        border: solid currentColor;
+        border-width: 0 1.5px 1.5px 0;
+        transform: rotate(-135deg);
+        transition: transform 0.15s;
+    }
+    .is-collapsed .card-toggle::after {
+        transform: rotate(45deg);
+        margin-top: -3px;
+    }
+    .card-toggle + .card-body {
+        margin-top: 10px;
+    }
+    .is-collapsed .card-body,
+    #map .is-collapsed #menu {
+        display: none;
+    }
+    .legend-item,
+    .check-option {
+        font-size: 14px;
+    }
+    #map .info-panel {
+        width: calc(100vw - 24px - 0px);
+        max-width: 320px;
+    }
+    #map .leaflet-bottom.leaflet-center {
+        max-width: calc(100% - 130px);
+    }
+    #map .leaflet-control-attribution {
+        font-size: 10px;
+        line-height: 1.35;
+    }
+}
